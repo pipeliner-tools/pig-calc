@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pig Velocity & ETA Calculator</title>
+    
+    <style>
+        /* --- 1. RESET & BASE STYLES --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #e2e8f0; /* Slate 200 */
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        /* --- 2. LAYOUT GRID --- */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 2fr; /* Inputs takes 1 part, Results 2 parts */
+            gap: 20px;
+        }
+
+        /* Responsive: Stack on mobile */
+        @media (max-width: 768px) {
+            .container { grid-template-columns: 1fr; }
+        }
+
+        /* --- 3. COMPONENTS --- */
+        
+        /* Header */
+        .header-bar {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 15px;
+            margin-bottom: 10px;
+        }
+        .header-title h1 { font-size: 1.25rem; color: white; font-weight: 700; }
+        .header-title p { font-size: 0.85rem; color: #94a3b8; }
+        .btn-print {
+            background: #1e293b; color: #cbd5e1; border: 1px solid #475569;
+            padding: 5px 12px; font-size: 0.8rem; border-radius: 4px; cursor: pointer;
+        }
+        .btn-print:hover { background: #334155; }
+
+        /* Cards */
+        .card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .section-header {
+            color: #60a5fa; /* Blue 400 */
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+
+        /* Forms */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        
+        .input-group { margin-bottom: 10px; }
+        
+        .input-group label {
+            display: block;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        .input-field {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.95rem;
+        }
+        .input-field:focus { outline: none; border-color: #3b82f6; }
+
+        /* Read-only Values */
+        .read-only-val {
+            padding: 8px;
+            background: #020617;
+            border: 1px solid #334155;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #94a3b8;
+        }
+        .read-only-val strong { color: white; }
+
+        /* --- 4. RESULTS DASHBOARD --- */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        @media (max-width: 600px) { .dashboard-grid { grid-template-columns: 1fr; } }
+
+        .dash-card {
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid;
+        }
+        
+        /* Card Colors */
+        .dash-blue { background: rgba(30, 58, 138, 0.2); border-color: rgba(30, 58, 138, 0.5); }
+        .dash-purple { background: rgba(88, 28, 135, 0.2); border-color: rgba(88, 28, 135, 0.5); }
+        .dash-green { background: rgba(6, 78, 59, 0.2); border-color: rgba(6, 78, 59, 0.5); }
+
+        .dash-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-bottom: 5px; }
+        .dash-blue .dash-label { color: #60a5fa; }
+        .dash-purple .dash-label { color: #c084fc; }
+        .dash-green .dash-label { color: #34d399; }
+
+        .dash-value { font-size: 1.8rem; font-weight: 700; color: white; font-family: monospace; line-height: 1.1; }
+        .dash-unit { font-size: 0.75rem; color: #94a3b8; font-family: sans-serif; font-weight: normal; }
+        
+        .dash-sub {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            font-size: 0.8rem;
+            color: #cbd5e1;
+            font-family: monospace;
+        }
+
+        /* --- 5. VISUALIZATION --- */
+        .pipeline-graphic {
+            position: relative;
+            height: 30px;
+            background: #020617;
+            border: 1px solid #475569;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+            margin-bottom: 5px;
+        }
+
+        /* Flow Stripes using pure CSS gradient */
+        .pipeline-flow {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: linear-gradient(
+                45deg, 
+                rgba(59, 130, 246, 0.15) 25%, transparent 25%, 
+                transparent 50%, rgba(59, 130, 246, 0.15) 50%, 
+                rgba(59, 130, 246, 0.15) 75%, transparent 75%, transparent
+            );
+            background-size: 20px 20px;
+            animation: flowScroll 1s linear infinite;
+        }
+
+        .pig-container {
+            position: absolute; top: 50%; left: 0;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            display: flex; align-items: center; justify-content: center;
+            width: auto; pointer-events: none;
+        }
+
+        /* Pig Shape SVG */
+        .pig-svg { display: block; height: 28px; width: 50px; filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.6)); }
+
+        .chainage-badge {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            font-size: 9px;
+            font-family: monospace;
+            padding: 0 4px;
+            border-radius: 3px;
+            border: 1px solid rgba(255,255,255,0.2);
+            white-space: nowrap;
+        }
+
+        .vis-labels {
+            display: flex; justify-content: space-between;
+            font-size: 0.65rem; color: #64748b; font-family: monospace;
+        }
+
+        /* --- 6. DATA TABLE --- */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        .data-table th { text-align: left; color: #64748b; background: #0f172a; padding: 8px; border-bottom: 1px solid #334155; }
+        .data-table td { padding: 8px; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
+        .data-table .mono { font-family: monospace; color: #e2e8f0; }
+
+        @keyframes flowScroll { from { background-position: 0 0; } to { background-position: 20px 0; } }
+        
+        @media print {
+            body { background: white; color: black; padding: 0; }
+            .card { border: 1px solid #ddd; box-shadow: none; background: white; color: black; }
+            .header-bar, .btn-print { display: none; }
+            .input-field { border: 1px solid #ccc; color: black; background: white; }
+            .section-header { color: black; border-bottom: 1px solid #000; }
+            .dash-value, .dash-label { color: black !important; }
+            .dash-card { border: 1px solid #ccc; background: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        
+        <!-- Header -->
+        <div class="header-bar">
+            <div class="header-title">
+                <h1>Pig Velocity & ETA Calculator</h1>
+                <p>Offline Version</p>
+            </div>
+            <button class="btn-print" onclick="window.print()">Print Report</button>
+        </div>
+
+        <!-- LEFT COLUMN: Inputs -->
+        <div class="col-inputs">
+            
+            <!-- Geometry -->
+            <div class="card">
+                <div class="section-header">Pipeline Geometry</div>
+                <div class="grid-2">
+                    <div class="input-group">
+                        <label>Outer Diameter (inch)</label>
+                        <input type="number" id="inp-od" class="input-field calc-trigger" value="36" step="0.1">
+                    </div>
+                    <div class="input-group">
+                        <label>Wall Thickness (mm)</label>
+                        <input type="number" id="inp-wt" class="input-field calc-trigger" value="12.7" step="0.1">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Inner Diameter</label>
+                    <div class="read-only-val" id="val-id"><strong>889</strong> mm</div>
+                </div>
+                <div class="grid-2" style="margin-top:10px; border-top:1px solid #334155; padding-top:10px;">
+                    <div class="input-group">
+                        <label>Launcher Chainage (km)</label>
+                        <input type="number" id="inp-ch-start" class="input-field calc-trigger" value="0.0" step="0.1">
+                    </div>
+                    <div class="input-group">
+                        <label>Receiver Chainage (km)</label>
+                        <input type="number" id="inp-ch-end" class="input-field calc-trigger" value="80.3" step="0.1">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Section Length</label>
+                    <div class="read-only-val"><span id="val-length"><strong>80.3</strong></span> km</div>
+                </div>
+            </div>
+
+            <!-- Gas Data -->
+            <div class="card">
+                <div class="section-header">Operating Conditions</div>
+                <div class="input-group">
+                    <label>Flow Rate (SCMH)</label>
+                    <input type="number" id="inp-flow" class="input-field calc-trigger" value="300000" step="1000">
+                </div>
+                <div class="grid-2">
+                    <div class="input-group">
+                        <label>Inlet Pressure (kg/cm²g)</label>
+                        <input type="number" id="inp-pin" class="input-field calc-trigger" value="56" step="1">
+                    </div>
+                    <div class="input-group">
+                        <label>Outlet Pressure (kg/cm²g)</label>
+                        <input type="number" id="inp-pout" class="input-field calc-trigger" value="55" step="1">
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="input-group">
+                        <label>Temperature (°C)</label>
+                        <input type="number" id="inp-temp" class="input-field calc-trigger" value="22" step="1">
+                    </div>
+                    <div class="input-group">
+                        <label>Specific Gravity</label>
+                        <input type="number" id="inp-sg" class="input-field calc-trigger" value="0.60" step="0.01">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ops -->
+            <div class="card">
+                <div class="section-header">Pigging Data</div>
+                <div class="input-group">
+                    <label>Launch Date & Time</label>
+                    <input type="datetime-local" id="inp-launch" class="input-field calc-trigger">
+                </div>
+                <div class="input-group">
+                    <label>Pig Sealing Efficiency (%)</label>
+                    <input type="number" id="inp-eff" class="input-field calc-trigger" value="100" max="100" min="50" step="1">
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT COLUMN: Results -->
+        <div class="col-results">
+            
+            <!-- Dashboard -->
+            <div class="dashboard-grid">
+                <div class="dash-card dash-blue">
+                    <div class="dash-label">Velocity</div>
+                    <div class="dash-value" id="out-vel-ms">0.00</div>
+                    <div class="dash-unit">m/s</div>
+                    <div class="dash-sub"><span id="out-vel-kmh">0.00</span> km/h</div>
+                </div>
+                <div class="dash-card dash-purple">
+                    <div class="dash-label">Transit Time</div>
+                    <div class="dash-value" id="out-time-hhmm">00:00</div>
+                    <div class="dash-unit">hours:min</div>
+                    <div class="dash-sub"><span id="out-time-dec">0.00</span> decimal hrs</div>
+                </div>
+                <div class="dash-card dash-green">
+                    <div class="dash-label">Est. Arrival</div>
+                    <div class="dash-value" style="font-size:1.4rem; margin-top:5px;" id="out-eta-time">--:--</div>
+                    <div class="dash-sub" id="out-eta-date">--/--/----</div>
+                </div>
+            </div>
+
+            <!-- Live Position -->
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:end; margin-bottom:5px;">
+                    <div class="section-header" style="border:none; margin:0; padding:0;">Live Position</div>
+                    <div id="pig-status-text" style="font-size:0.75rem; font-weight:bold; color:#60a5fa;">Ready</div>
+                </div>
+
+                <div class="pipeline-graphic">
+                    <div class="pipeline-flow" id="flow-anim"></div>
+                    <!-- Pig Container -->
+                    <div class="pig-container" id="pig-anim">
+                        <!-- SVG Pig Shape -->
+                        <svg class="pig-svg" width="50" height="28" viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
+                            <ellipse cx="15" cy="30" rx="8" ry="28" fill="#dc2626" stroke="#991b1b" stroke-width="2" />
+                            <rect x="15" y="10" width="50" height="40" fill="#94a3b8" stroke="#475569" />
+                            <ellipse cx="65" cy="30" rx="8" ry="28" fill="#dc2626" stroke="#991b1b" stroke-width="2" />
+                            <path d="M 65 15 Q 85 30 65 45" fill="#ef4444" />
+                            <path d="M 20 15 L 60 15" stroke="white" stroke-width="2" opacity="0.3" stroke-linecap="round"/>
+                        </svg>
+                        <!-- Chainage Badge -->
+                        <div class="chainage-badge" id="pig-chainage-badge">0.000 km</div>
+                    </div>
+                </div>
+
+                <div class="vis-labels">
+                    <span id="label-launcher">Launcher</span>
+                    <span id="progress-text">0%</span>
+                    <span id="label-receiver">Receiver</span>
+                </div>
+            </div>
+
+            <!-- Parameters Table -->
+            <div class="card">
+                <div class="section-header">Calculation Details (AGA / CNGA)</div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Parameter</th>
+                            <th>Value</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Average Pressure (P<sub>avg</sub>)</td>
+                            <td class="mono"><span id="out-pavg">0</span> kg/cm²a</td>
+                            <td>Calculated using 2/3 rule</td>
+                        </tr>
+                        <tr>
+                            <td>Compressibility (Z)</td>
+                            <td class="mono"><span id="out-z">0</span></td>
+                            <td>CNGA Equation</td>
+                        </tr>
+                        <tr>
+                            <td>Actual Flow (Q<sub>act</sub>)</td>
+                            <td class="mono"><span id="out-qact">0</span> m³/day</td>
+                            <td>Corrected for P, T & Z</td>
+                        </tr>
+                        <tr>
+                            <td>Line Volume</td>
+                            <td class="mono"><span id="out-vol">0</span> m³</td>
+                            <td>Total Physical Volume</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- CONSTANTS ---
+            const STANDARD_TEMP_R = 520;
+            const STANDARD_PRESSURE_PSIA = 14.7;
+            const KGCM2_TO_PSI = 14.2233;
+            const SCMH_TO_SCFD = 35.3147 * 24; 
+            const CFT_TO_M3 = 0.0283168;
+
+            // --- STATE ---
+            let totalTravelHours = 0;
+            let pipelineLengthKm = 0;
+            let launcherKm = 0;
+            let receiverKm = 0;
+
+            // --- SAFE STORAGE ---
+            const safeStorage = {
+                save: function(key, data) {
+                    try { localStorage.setItem(key, JSON.stringify(data)); } catch(e) {}
+                },
+                load: function(key) {
+                    try { return JSON.parse(localStorage.getItem(key)); } catch(e) { return null; }
+                }
+            };
+
+            // --- HELPER ---
+            function getVal(id) {
+                const el = document.getElementById(id);
+                return el ? parseFloat(el.value) : NaN;
+            }
+
+            // --- INIT ---
+            function init() {
+                const saved = safeStorage.load('pigCalc_v6');
+                if (saved) {
+                    Object.keys(saved).forEach(id => {
+                        const el = document.getElementById(id);
+                        if(el) el.value = saved[id];
+                    });
+                } else {
+                    // Default launch time
+                    const now = new Date();
+                    const oneHourAgo = new Date(now.getTime() - (3600000));
+                    oneHourAgo.setMinutes(oneHourAgo.getMinutes() - oneHourAgo.getTimezoneOffset());
+                    const el = document.getElementById('inp-launch');
+                    if(el) el.value = oneHourAgo.toISOString().slice(0, 16);
+                }
+                calculate();
+                requestAnimationFrame(animate);
+            }
+
+            // --- MAIN CALCULATION ---
+            function calculate() {
+                // Save
+                const inputs = {};
+                document.querySelectorAll('.calc-trigger').forEach(el => inputs[el.id] = el.value);
+                safeStorage.save('pigCalc_v6', inputs);
+
+                try {
+                    // 1. Get Values
+                    const odInch = getVal('inp-od');
+                    const wtMm = getVal('inp-wt');
+                    const chStart = getVal('inp-ch-start');
+                    const chEnd = getVal('inp-ch-end');
+                    const flowScmh = getVal('inp-flow');
+                    const pInKg = getVal('inp-pin');
+                    const pOutKg = getVal('inp-pout');
+                    const tempC = getVal('inp-temp');
+                    const sg = getVal('inp-sg');
+                    const eff = getVal('inp-eff') / 100;
+
+                    // 2. Geometry
+                    launcherKm = isNaN(chStart) ? 0 : chStart;
+                    receiverKm = isNaN(chEnd) ? 0 : chEnd;
+                    pipelineLengthKm = Math.abs(receiverKm - launcherKm);
+
+                    document.getElementById('val-length').innerText = pipelineLengthKm.toFixed(3);
+                    document.getElementById('label-launcher').innerText = `LAUNCHER (${launcherKm} km)`;
+                    document.getElementById('label-receiver').innerText = `RECEIVER (${receiverKm} km)`;
+
+                    let areaSqM = 0;
+                    if(!isNaN(odInch) && !isNaN(wtMm)) {
+                        // Convert Inch to MM for ID calc
+                        const odMm = odInch * 25.4;
+                        const idMm = odMm - (2 * wtMm);
+                        document.getElementById('val-id').innerHTML = `<strong>${idMm.toFixed(1)}</strong> mm`;
+                        
+                        const idM = idMm / 1000;
+                        areaSqM = Math.PI * Math.pow(idM / 2, 2);
+                        
+                        if(pipelineLengthKm > 0) {
+                            const vol = areaSqM * (pipelineLengthKm * 1000);
+                            document.getElementById('out-vol').innerText = Math.round(vol).toLocaleString();
+                        }
+                    }
+
+                    // 3. Gas & Velocity
+                    let pigVelMs = 0;
+                    let qActM3Day = 0;
+                    let pAvgKg = 0;
+                    let zFactor = 0;
+                    totalTravelHours = 0;
+
+                    if(!isNaN(flowScmh) && !isNaN(pInKg) && !isNaN(pOutKg) && !isNaN(tempC) && !isNaN(sg) && areaSqM > 0 && pipelineLengthKm > 0) {
+                        
+                        // Imperial conversions
+                        const qStd = flowScmh * SCMH_TO_SCFD;
+                        const pInPsia = (pInKg * KGCM2_TO_PSI) + 14.7;
+                        const pOutPsia = (pOutKg * KGCM2_TO_PSI) + 14.7;
+                        const tempR = (tempC * 9/5) + 32 + 460;
+
+                        // P Avg (2/3 Rule)
+                        const pAvgPsia = (2/3) * (pInPsia + pOutPsia - ((pInPsia * pOutPsia) / (pInPsia + pOutPsia)));
+                        const pAvgPsig = pAvgPsia - 14.7;
+                        pAvgKg = pAvgPsia / KGCM2_TO_PSI; // Display absolute
+
+                        // Z Factor (CNGA)
+                        const num = pAvgPsig * 344400 * Math.pow(10, 1.785 * sg);
+                        const den = Math.pow(tempR, 3.825);
+                        zFactor = 1 / (1 + (num / den));
+
+                        // Q Actual
+                        const qActCfDay = qStd * (STANDARD_PRESSURE_PSIA / pAvgPsia) * (tempR / STANDARD_TEMP_R) * zFactor;
+                        
+                        // Metric Flow & Velocity
+                        qActM3Day = qActCfDay * CFT_TO_M3;
+                        const qActM3Sec = qActM3Day / 86400;
+                        
+                        const gasVelMs = qActM3Sec / areaSqM;
+                        pigVelMs = gasVelMs * eff;
+
+                        if(pigVelMs > 0) {
+                            const lenM = pipelineLengthKm * 1000;
+                            const seconds = lenM / pigVelMs;
+                            totalTravelHours = seconds / 3600;
+                        }
+                    }
+
+                    // 4. Update UI
+                    const pigVelKmh = pigVelMs * 3.6;
+                    document.getElementById('out-vel-ms').innerText = pigVelMs.toFixed(2);
+                    document.getElementById('out-vel-kmh').innerText = pigVelKmh.toFixed(2);
+                    document.getElementById('out-pavg').innerText = pAvgKg.toFixed(2);
+                    document.getElementById('out-z').innerText = zFactor > 0 ? zFactor.toFixed(4) : "0.000";
+                    document.getElementById('out-qact').innerText = Math.round(qActM3Day).toLocaleString();
+
+                    if(totalTravelHours > 0 && isFinite(totalTravelHours)) {
+                        let h = Math.floor(totalTravelHours);
+                        let m = Math.round((totalTravelHours - h) * 60);
+                        if(m === 60) { m = 0; h++; }
+                        document.getElementById('out-time-hhmm').innerText = `${h}:${m.toString().padStart(2,'0')}`;
+                        document.getElementById('out-time-dec').innerText = totalTravelHours.toFixed(2);
+
+                        const launchVal = document.getElementById('inp-launch').value;
+                        if(launchVal) {
+                            const arrDate = new Date(new Date(launchVal).getTime() + (totalTravelHours * 3600000));
+                            document.getElementById('out-eta-time').innerText = arrDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                            document.getElementById('out-eta-date').innerText = arrDate.toLocaleDateString();
+                        }
+                    } else {
+                        document.getElementById('out-time-hhmm').innerText = "--:--";
+                        document.getElementById('out-time-dec').innerText = "0.00";
+                        document.getElementById('out-eta-time').innerText = "--:--";
+                    }
+
+                    // Anim speed
+                    const safeVel = pigVelMs > 0 ? pigVelMs : 0.5;
+                    const dur = Math.max(0.2, 2 - (safeVel * 0.2));
+                    document.getElementById('flow-anim').style.animationDuration = `${dur}s`;
+
+                } catch(e) { console.error(e); }
+            }
+
+            // --- ANIMATION LOOP ---
+            function animate() {
+                const launchVal = document.getElementById('inp-launch').value;
+                const container = document.getElementById('pig-anim');
+                const statusTxt = document.getElementById('pig-status-text');
+                const badge = document.getElementById('pig-chainage-badge');
+                const progTxt = document.getElementById('progress-text');
+
+                if(!launchVal || totalTravelHours <= 0) {
+                    container.style.left = "0%";
+                    container.style.transform = "translate(0%, -50%)"; // Left align
+                    statusTxt.innerText = "Ready";
+                    badge.innerText = `${launcherKm.toFixed(3)} km`;
+                    requestAnimationFrame(animate);
+                    return;
+                }
+
+                const now = new Date().getTime();
+                const launch = new Date(launchVal).getTime();
+                const duration = totalTravelHours * 3600000;
+                const elapsed = now - launch;
+
+                let pct = 0;
+                let curKm = 0;
+
+                if(elapsed < 0) {
+                    pct = 0;
+                    curKm = launcherKm;
+                    statusTxt.innerText = "Scheduled";
+                    statusTxt.style.color = "#60a5fa";
+                } else if (elapsed >= duration) {
+                    pct = 100;
+                    curKm = receiverKm;
+                    statusTxt.innerText = "Arrived";
+                    statusTxt.style.color = "#34d399";
+                } else {
+                    pct = (elapsed / duration) * 100;
+                    // Linear Interpolation: Start + (Diff * Pct)
+                    curKm = launcherKm + ((receiverKm - launcherKm) * (pct / 100));
+                    statusTxt.innerText = "In Transit";
+                    statusTxt.style.color = "#facc15";
+                }
+
+                container.style.left = `${pct}%`;
+                container.style.transform = "translate(-50%, -50%)";
+                badge.innerText = `${curKm.toFixed(3)} km`;
+                progTxt.innerText = `${pct.toFixed(1)}%`;
+
+                requestAnimationFrame(animate);
+            }
+
+            // --- START ---
+            init();
+            document.querySelectorAll('.calc-trigger').forEach(el => {
+                el.addEventListener('input', calculate);
+                el.addEventListener('change', calculate);
+            });
+        });
+    </script>
+</body>
+</html>
